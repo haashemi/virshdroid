@@ -11,7 +11,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,11 +18,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -35,6 +32,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
@@ -43,15 +42,15 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.LinearWavyProgressIndicator
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
@@ -66,7 +65,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
@@ -79,7 +77,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
@@ -94,9 +91,8 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
-@Serializable private data object ServersKey : NavKey
+@Serializable private data object HomeKey : NavKey
 @Serializable private data class EditKey(val id: String?) : NavKey
-@Serializable private data class VmsKey(val id: String) : NavKey
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -115,8 +111,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun App(store: Store) {
-    val servers = store.servers.collectAsState(initial = null).value ?: return
-    val backStack = rememberNavBackStack(ServersKey)
+    val saved = store.saved.collectAsState(initial = null).value ?: return
+    val backStack = rememberNavBackStack(HomeKey)
     val scope = rememberCoroutineScope()
     val back: () -> Unit = { backStack.removeLastOrNull() }
 
@@ -124,53 +120,49 @@ private fun App(store: Store) {
         backStack = backStack,
         onBack = back,
         entryProvider = entryProvider {
-            entry<ServersKey> {
-                ServersScreen(servers, onOpen = { backStack.add(VmsKey(it.id)) }, onEdit = { backStack.add(EditKey(it?.id)) })
+            entry<HomeKey> {
+                HomeScreen(
+                    saved = saved,
+                    onSelect = { scope.launch { store.select(it.id) } },
+                    onEdit = { backStack.add(EditKey(it?.id)) },
+                    onTrust = { scope.launch { store.save(it) } },
+                )
             }
             entry<EditKey> { key ->
                 EditScreen(
-                    initial = servers.find { it.id == key.id },
+                    initial = saved.servers.find { it.id == key.id },
                     onSave = { scope.launch { store.save(it) }; back() },
                     onDelete = { id -> scope.launch { store.remove(id) }; back() },
                     onBack = back,
                 )
             }
-            entry<VmsKey> { key ->
-                servers.find { it.id == key.id }?.let { server ->
-                    VmsScreen(server, onTrust = { scope.launch { store.save(it) } }, onBack = back)
-                }
-            }
         },
     )
 }
 
+/** Picks the server to connect to; [onEdit] with null adds a new one. */
 @Composable
-private fun ServersScreen(servers: List<Server>, onOpen: (Server) -> Unit, onEdit: (Server?) -> Unit) {
-    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    Scaffold(
-        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
-        topBar = { LargeFlexibleTopAppBar(title = { Text("Servers") }, scrollBehavior = scroll) },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { onEdit(null) },
-                icon = { Icon(Icons.Default.Add, null) },
-                text = { Text("Add server") },
-            )
-        },
-    ) { padding ->
-        if (servers.isEmpty()) Placeholder("No servers yet", Modifier.padding(padding))
-        LazyColumn(Modifier.fillMaxSize().consumeWindowInsets(padding), contentPadding = padding) {
-            items(servers, key = { it.id }) { server ->
-                ListItem(
-                    headlineContent = { Text(server.title) },
-                    supportingContent = { Text("${server.user}@${server.host}:${server.port}") },
-                    trailingContent = {
-                        IconButton(onClick = { onEdit(server) }) { Icon(Icons.Default.Edit, "Edit ${server.title}") }
-                    },
-                    modifier = Modifier.clickable { onOpen(server) },
+private fun ServerMenu(saved: Saved, onSelect: (Server) -> Unit, onEdit: (Server?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { open = true }) {
+            Text(saved.selected?.title ?: "Virshdroid", style = MaterialTheme.typography.titleLarge)
+            Icon(Icons.Default.ArrowDropDown, "Choose server")
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            saved.servers.forEach { server ->
+                DropdownMenuItem(
+                    text = { Text(server.title) },
+                    onClick = { open = false; onSelect(server) },
+                    leadingIcon = { if (server.id == saved.selected?.id) Icon(Icons.Default.Check, "Selected") },
                 )
             }
-            item { Spacer(Modifier.height(88.dp)) } // keep the last row clear of the FAB
+            if (saved.servers.isNotEmpty()) HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text("Add server") },
+                onClick = { open = false; onEdit(null) },
+                leadingIcon = { Icon(Icons.Default.Add, null) },
+            )
         }
     }
 }
@@ -258,7 +250,8 @@ private fun EditScreen(initial: Server?, onSave: (Server) -> Unit, onDelete: (St
 }
 
 @Composable
-private fun VmsScreen(server: Server, onTrust: (Server) -> Unit, onBack: () -> Unit) {
+private fun HomeScreen(saved: Saved, onSelect: (Server) -> Unit, onEdit: (Server?) -> Unit, onTrust: (Server) -> Unit) {
+    val server = saved.selected
     var vms by remember { mutableStateOf<List<Vm>?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -268,10 +261,11 @@ private fun VmsScreen(server: Server, onTrust: (Server) -> Unit, onBack: () -> U
 
     /** Runs [action] (if any), then reloads the list; failures are shown in a dialog titled [failure]. */
     suspend fun load(failure: String = "Couldn't load virtual machines", action: suspend () -> Unit = {}) {
+        val target = server ?: return
         busy = true
         try {
             action()
-            vms = Virsh.list(server)
+            vms = Virsh.list(target)
         } catch (e: CancellationException) {
             throw e
         } catch (e: HostKeyException) {
@@ -284,14 +278,18 @@ private fun VmsScreen(server: Server, onTrust: (Server) -> Unit, onBack: () -> U
     }
 
     fun act(action: String, verb: String, vm: Vm) {
-        scope.launch { load("Couldn't $verb ${vm.name}") { Virsh.run(server, action, vm.name) } }
+        val target = server ?: return
+        scope.launch { load("Couldn't $verb ${vm.name}") { Virsh.run(target, action, vm.name) } }
     }
 
     val context = LocalContext.current
     val requestLocalNetwork = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         scope.launch { load() }
     }
+    // Connects automatically whenever the selected server changes.
     LaunchedEffect(server) {
+        vms = null
+        if (server == null) return@LaunchedEffect
         if (Build.VERSION.SDK_INT >= 37 &&
             context.checkSelfPermission(Manifest.permission.ACCESS_LOCAL_NETWORK) != PackageManager.PERMISSION_GRANTED
         ) {
@@ -304,10 +302,12 @@ private fun VmsScreen(server: Server, onTrust: (Server) -> Unit, onBack: () -> U
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(server.title) },
-                navigationIcon = { BackButton(onBack) },
+                title = { ServerMenu(saved, onSelect, onEdit) },
                 actions = {
-                    IconButton(onClick = { scope.launch { load() } }, enabled = !busy) { Icon(Icons.Default.Refresh, "Refresh") }
+                    if (server != null) {
+                        IconButton(onClick = { onEdit(server) }) { Icon(Icons.Default.Edit, "Edit ${server.title}") }
+                        IconButton(onClick = { scope.launch { load() } }, enabled = !busy) { Icon(Icons.Default.Refresh, "Refresh") }
+                    }
                 },
             )
         },
@@ -315,6 +315,14 @@ private fun VmsScreen(server: Server, onTrust: (Server) -> Unit, onBack: () -> U
         Box(Modifier.fillMaxSize().padding(padding)) {
             val list = vms
             when {
+                server == null -> Column(
+                    Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Text("No servers yet", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(onClick = { onEdit(null) }, shapes = ButtonDefaults.shapes()) { Text("Add server") }
+                }
                 list == null && busy -> LoadingIndicator(Modifier.align(Alignment.Center))
                 list == null -> Placeholder("Not connected")
                 list.isEmpty() -> Placeholder("No virtual machines")
@@ -337,7 +345,7 @@ private fun VmsScreen(server: Server, onTrust: (Server) -> Unit, onBack: () -> U
         }
     }
 
-    hostKey?.let { key ->
+    if (server != null) hostKey?.let { key ->
         AlertDialog(
             onDismissRequest = { hostKey = null },
             icon = { Icon(Icons.Default.Warning, null) },

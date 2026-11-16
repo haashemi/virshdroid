@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -16,8 +18,21 @@ android {
         versionName = "1.0"
     }
 
+    // Release signing key lives outside git: keystore.properties + release.jks in the project root.
+    val signing = Properties()
+    rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { signing.load(it) }
+    if (signing.isNotEmpty()) {
+        signingConfigs.create("release") {
+            storeFile = rootProject.file(signing.getProperty("storeFile"))
+            storePassword = signing.getProperty("storePassword")
+            keyAlias = signing.getProperty("keyAlias")
+            keyPassword = signing.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

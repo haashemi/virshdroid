@@ -34,19 +34,34 @@ data class Server(
 
 private val Context.dataStore by preferencesDataStore("servers")
 private val SERVERS = stringPreferencesKey("servers")
+private val SELECTED = stringPreferencesKey("selected")
+
+/** The saved servers and the one the app connects to (the first one if none was chosen). */
+class Saved(val servers: List<Server>, val selected: Server?)
 
 /** Saved servers, stored as one JSON list encrypted with an Android Keystore key. */
 class Store(private val context: Context) {
-    val servers = context.dataStore.data.map { decode(it[SERVERS]) }
+    val saved = context.dataStore.data.map { prefs ->
+        val servers = decode(prefs[SERVERS])
+        Saved(servers, servers.find { it.id == prefs[SELECTED] } ?: servers.firstOrNull())
+    }
 
-    suspend fun save(server: Server) = update { list ->
+    suspend fun select(id: String) {
+        context.dataStore.edit { it[SELECTED] = id }
+    }
+
+    /** Adds or replaces [server] and selects it. */
+    suspend fun save(server: Server) = update(select = server.id) { list ->
         if (list.any { it.id == server.id }) list.map { if (it.id == server.id) server else it } else list + server
     }
 
     suspend fun remove(id: String) = update { list -> list.filterNot { it.id == id } }
 
-    private suspend fun update(change: (List<Server>) -> List<Server>) {
-        context.dataStore.edit { it[SERVERS] = encrypt(Json.encodeToString(change(decode(it[SERVERS])))) }
+    private suspend fun update(select: String? = null, change: (List<Server>) -> List<Server>) {
+        context.dataStore.edit { prefs ->
+            prefs[SERVERS] = encrypt(Json.encodeToString(change(decode(prefs[SERVERS]))))
+            select?.let { prefs[SELECTED] = it }
+        }
     }
 
     private fun decode(blob: String?): List<Server> = blob?.let { Json.decodeFromString(decrypt(it)) } ?: emptyList()

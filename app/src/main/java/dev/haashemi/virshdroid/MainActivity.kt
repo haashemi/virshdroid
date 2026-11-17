@@ -6,6 +6,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -174,7 +175,10 @@ private fun EditScreen(initial: Server?, onSave: (Server) -> Unit, onDelete: (St
     var confirmDelete by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val importKey = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { s = s.copy(privateKey = context.contentResolver.openInputStream(it)!!.use { it.readBytes().decodeToString() }) }
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching { context.contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() } }
+            .onSuccess { s = s.copy(privateKey = it) }
+            .onFailure { Toast.makeText(context, "Couldn't read the key file", Toast.LENGTH_SHORT).show() }
     }
     val portNumber = port.toIntOrNull()?.takeIf { it in 1..65535 }
     val valid = s.host.isNotBlank() && s.user.isNotBlank() && portNumber != null &&

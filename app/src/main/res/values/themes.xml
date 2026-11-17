@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Only the launch window uses this; Compose draws everything else. Dark variant in values-night. -->
+    <style name="Theme.Virshdroid" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

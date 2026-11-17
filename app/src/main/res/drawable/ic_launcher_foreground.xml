@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two server rack units, drawn inside the 66dp adaptive icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M32,32H76A4,4 0,0 1,80 36V46A4,4 0,0 1,76 50H32A4,4 0,0 1,28 46V36A4,4 0,0 1,32 32Z
+            M34.5,41a2.5,2.5 0,1 0,5 0a2.5,2.5 0,1 0,-5 0Z
+            M45,39.5H72V42.5H45Z
+            M32,58H76A4,4 0,0 1,80 62V72A4,4 0,0 1,76 76H32A4,4 0,0 1,28 72V62A4,4 0,0 1,32 58Z
+            M34.5,67a2.5,2.5 0,1 0,5 0a2.5,2.5 0,1 0,-5 0Z
+            M45,65.5H72V68.5H45Z" />
+</vector>
